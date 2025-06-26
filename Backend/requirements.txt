@@ -1,0 +1,37 @@
+fastapi
+uvicorn[standard]
+pydantic[email,dotenv]
+pymongo
+python-jose[cryptography]
+passlib[bcrypt]
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+httpx
+python-multipart
+google-auth
+google-api-python-client
+python-dotenv
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+python-dotenv
+
+Flask>=2.0
+Flask-CORS
+Flask-Login
+Flask-JWT-Extended
+flask_mail
+flask_admin
+Flask-WTF
+email_validator
+
+
+# Database (for MongoDB BSON/ObjectId)
+pymongo
+requests
+python-dotenv
+python-dateutil
+pytz
+# Keep python-telegram-bot if you still use bot.py separately
+python-telegram-bot==13.15
