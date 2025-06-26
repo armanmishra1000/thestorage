@@ -1,0 +1,11 @@
+<nav class="bg-gray-800 text-white p-4 shadow-md">
+  <div class="container mx-auto flex justify-between items-center">
+    <a routerLink="/" class="text-xl font-bold">File Transfer</a>
+    <div>
+      <a routerLink="/dashboard" class="px-3 py-2 rounded hover:bg-gray-700" *ngIf="isLoggedIn">Dashboard</a>
+      <a routerLink="/login" class="px-3 py-2 rounded hover:bg-gray-700" *ngIf="!isLoggedIn">Login</a>
+      <a routerLink="/register" class="px-3 py-2 rounded hover:bg-gray-700" *ngIf="!isLoggedIn">Register</a>
+      <button (click)="logout()" class="px-3 py-2 rounded hover:bg-gray-700" *ngIf="isLoggedIn">Logout</button>
+    </div>
+  </div>
+</nav>
