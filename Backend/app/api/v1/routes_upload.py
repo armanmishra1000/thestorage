@@ -110,7 +110,15 @@ from typing import Optional
 from pathlib import Path # Add this import for path handling
 from app.services.auth_service import try_get_current_user, get_current_user
 from app.services.auth_service import get_current_user_optional
+from app.tasks.drive_uploader_task import parallel_upload_to_drive
+from fastapi import BackgroundTasks
 router = APIRouter()
+ws_router = APIRouter()
+
+# Add this list of allowed origins at the top of the file, under your imports
+ALLOWED_ORIGINS = {
+    "http://localhost:4200",
+}
 
 # Define the directory for temporary uploads
 UPLOAD_DIR = Path("temp_uploads")
@@ -140,53 +148,66 @@ async def initiate_upload(
 
 
 # THIS IS THE NEW WEBSOCKET ENDPOINT
-@router.websocket("/ws/upload/{file_id}")
-async def websocket_upload(websocket: WebSocket, file_id: str):
-    """
-    Handles the high-speed file upload via a WebSocket connection.
-    Receives binary chunks and writes them to a temporary file.
-    """
+@ws_router.websocket("/ws/upload/{file_id}")
+async def websocket_upload(
+    websocket: WebSocket, 
+    file_id: str,
+    background_tasks: BackgroundTasks # <-- ADD THIS DEPENDENCY
+):
     await websocket.accept()
     
-    # Check if the file_id is valid
     file_doc = db.files.find_one({"_id": file_id})
     if not file_doc:
-        print(f"Invalid file_id received: {file_id}")
-        await websocket.close(code=1008) # Policy Violation
+        await websocket.close(code=1008)
         return
 
     file_path = UPLOAD_DIR / f"{file_id}.tmp"
     bytes_written = 0
     
-    # Update status in DB to show that the upload to the server has started
     db.files.update_one({"_id": file_id}, {"$set": {"status": UploadStatus.UPLOADING_TO_SERVER}})
 
     try:
-        with open(file_path, "wb") as f:
-            while True:
-                # Receive data from the client
-                data = await websocket.receive_bytes()
-                f.write(data)
-                bytes_written += len(data)
-
-    except WebSocketDisconnect:
-        print(f"Client disconnected. Upload for {file_id} finished.")
-        # Final status update once the client disconnects
-        # Here we can also verify if bytes_written matches the expected size
+        # We no longer need the 'with open' here, we'll open it inside the loop
+        # to ensure it's closed before the background task starts.
+        f = open(file_path, "wb")
+        while True:
+            # receive_json or receive_bytes? We need to handle both.
+            # We'll use a generic receive() and check the type.
+            message = await websocket.receive()
+            
+            if "text" in message:
+                # This is our signal message
+                if message["text"] == "DONE":
+                    print(f"Received DONE signal for file_id: {file_id}. Finishing up.")
+                    break # Exit the loop
+            elif "bytes" in message:
+                # This is a file chunk
+                f.write(message["bytes"])
+                bytes_written += len(message["bytes"])
+    
+    finally:
+        # This block will execute whether the loop breaks or an error occurs
+        f.close() # Make sure the file handle is closed
+        print(f"Client connection processing finished for {file_id}.")
+        
+        # Now we check the file size and trigger the background task
         expected_size = file_doc.get("size_bytes", 0)
+        
         if bytes_written == expected_size:
             db.files.update_one({"_id": file_id}, {"$set": {"status": UploadStatus.UPLOADED_TO_SERVER}})
-            print(f"File {file_id} successfully saved to {file_path}")
+            print(f"File {file_id} successfully saved to {file_path}. Triggering Drive upload.")
+            
+            filename = file_doc.get("filename", "untitled")
+            background_tasks.add_task(parallel_upload_to_drive, file_id, file_path, filename)
+
         else:
             db.files.update_one({"_id": file_id}, {"$set": {"status": UploadStatus.FAILED}})
             print(f"File {file_id} upload failed. Expected {expected_size}, got {bytes_written}.")
-            file_path.unlink() # Delete partial file
-    except Exception as e:
-        # Handle other potential errors
-        print(f"An error occurred during upload for {file_id}: {e}")
-        db.files.update_one({"_id": file_id}, {"$set": {"status": UploadStatus.FAILED}})
-        if file_path.exists():
-            file_path.unlink() # Clean up
+            if file_path.exists():
+                file_path.unlink() # Delete partial file
+        
+        # The server now proactively closes the connection
+        await websocket.close()
 
 
 # We are keeping the old routes for now, but they will be replaced.

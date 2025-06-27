@@ -10,7 +10,7 @@ import { catchError, switchMap, tap } from 'rxjs/operators';
 export class UploadService {
   // Define API and WebSocket URLs
   private apiUrl = 'http://localhost:5000/api/v1'; // Or use environment file
-  private wsUrl = 'ws://localhost:5000/ws';       // Or use environment file
+  private wsUrl = 'ws://localhost:5000/ws_api/ws';      // Or use environment file
 
   // Subject to emit upload progress percentage (0-100)
   private uploadProgress = new Subject<number>();
@@ -119,27 +119,32 @@ export class UploadService {
    */
   private sliceAndSend(file: File, ws: WebSocket, start: number = 0): void {
     const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks
+    
+    // Check if we are done
+    if (start >= file.size) {
+      // All chunks have been sent. Send the DONE signal.
+      console.log('All file chunks sent. Sending DONE signal.');
+      ws.send('DONE'); 
+      // We don't close from the client side. The server will close the connection.
+      return;
+    }
+
+    // Prepare the next chunk
     const end = start + CHUNK_SIZE;
     const chunk = file.slice(start, end);
 
-    if (start < file.size) {
-      // FileReader is used to read the blob chunk as an ArrayBuffer
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(e.target?.result as ArrayBuffer);
-          // Calculate and emit progress
-          const progress = Math.min(Math.round((end / file.size) * 100), 99);
-          this.uploadProgress.next(progress);
-          // Recurse for the next chunk
-          this.sliceAndSend(file, ws, end);
-        }
-      };
-      reader.readAsArrayBuffer(chunk);
-    } else {
-      // When all chunks are sent, we don't close the socket from the client.
-      // We wait for the server to process and close it.
-      console.log('All file chunks sent. Waiting for server to close connection.');
-    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(e.target?.result as ArrayBuffer);
+        
+        const progress = Math.min(Math.round((end / file.size) * 100), 99);
+        this.uploadProgress.next(progress);
+        
+        // Recurse for the next chunk
+        this.sliceAndSend(file, ws, end);
+      }
+    };
+    reader.readAsArrayBuffer(chunk);
   }
 }

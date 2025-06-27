@@ -25,7 +25,7 @@ flask_mail
 flask_admin
 Flask-WTF
 email_validator
-
+httpx
 
 # Database (for MongoDB BSON/ObjectId)
 pymongo
