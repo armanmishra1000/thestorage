@@ -57,19 +57,76 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     return UserInDB(**user)
 
 # --- NEW: Function for optional authentication ---
+# async def get_current_user_optional(token: Optional[str] = Depends(oauth2_scheme_optional)) -> Optional[UserInDB]:
+#     if token is None:
+#         return None # No token provided, return None for anonymous user
+#     try:
+#         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+#         email: str = payload.get("sub")
+#         if email is None:
+#             return None # Invalid token payload
+#     except JWTError:
+#         return None # Token is invalid or expired
+
+#     user_doc = db.users.find_one({"email": email})
+#     if user_doc is None:
+#         return None # User not found in DB
+    
+#     return UserInDB(**user_doc)
+
 async def get_current_user_optional(token: Optional[str] = Depends(oauth2_scheme_optional)) -> Optional[UserInDB]:
+    """
+    A dependency that tries to get a user from a token.
+    If the token is invalid, missing, or the user doesn't exist,
+    it returns None instead of raising an error.
+    """
     if token is None:
-        return None # No token provided, return None for anonymous user
+        # This is the case for a completely anonymous user (no Authorization header)
+        return None
+        
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
-            return None # Invalid token payload
+            # Token is valid but doesn't contain the user identifier
+            return None
+        
+        user = db.users.find_one({"email": email})
+        if user is None:
+            # Token is for a user that no longer exists
+            return None
+            
+        return UserInDB(**user)
     except JWTError:
-        return None # Token is invalid or expired
+        # Token is malformed, expired, or has an invalid signature.
+        # For an optional endpoint, we treat this as an anonymous user.
+        return None
 
-    user_doc = db.users.find_one({"email": email})
-    if user_doc is None:
-        return None # User not found in DB
-    
-    return UserInDB(**user_doc)
+# Add this function to the end of auth_service.py
+
+async def try_get_current_user(token: str = Depends(oauth2_scheme)) -> Optional[UserInDB]:
+    """
+    A dependency that tries to get a user from a token.
+    If the token is invalid, missing, or the user doesn't exist,
+    it returns None instead of raising an error.
+    """
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            return None
+        
+        user_data = db.users.find_one({"email": email})
+        if user_data is None:
+            return None
+            
+        return UserInDB(**user_data)
+    except (JWTError, AttributeError):
+        # This will catch errors from an invalid token or if no token is provided
+        return None

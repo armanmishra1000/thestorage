@@ -1,30 +1,30 @@
 <div class="max-w-2xl mx-auto mt-10 p-6 bg-white rounded-lg shadow-xl">
-  <h2 class="text-2xl font-bold text-center mb-6">Upload Your File</h2>
+  <h2 class="text-2xl font-bold text-center mb-6">High-Speed File Uploader</h2>
   
   <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500"
        (click)="fileInput.click()" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
     <input type="file" #fileInput (change)="onFileSelected($event)" class="hidden">
-    <p class="text-gray-500">Drag & Drop your file here or click to select a file</p>
+    <p class="text-gray-500">Drag & Drop your file here or click to select</p>
   </div>
   
-  <div *ngIf="selectedFile" class="mt-4">
-    <p><strong>Selected file:</strong> {{ selectedFile.name }} ({{ selectedFile.size | number }} bytes)</p>
-    <button (click)="onUpload()" class="w-full mt-4 bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 disabled:bg-blue-300" [disabled]="uploading">
-      {{ uploading ? 'Uploading...' : 'Upload' }}
+  <div *ngIf="selectedFile && !uploading && !uploadSuccess" class="mt-4">
+    <p><strong>Selected:</strong> {{ selectedFile.name }} ({{ selectedFile.size / 1024 / 1024 | number:'1.2-2' }} MB)</p>
+    <button (click)="onUpload()" class="w-full mt-4 bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600">
+      Upload
     </button>
   </div>
   
-  <div *ngIf="uploadProgress > 0" class="mt-4">
+  <div *ngIf="uploading" class="mt-4">
+    <p class="text-center font-semibold mb-2">Uploading...</p>
     <mat-progress-bar mode="determinate" [value]="uploadProgress"></mat-progress-bar>
     <p class="text-center mt-2">{{ uploadProgress }}%</p>
   </div>
 
-  <div *ngIf="downloadLink" class="mt-6 p-4 bg-green-100 border border-green-400 text-green-700 rounded relative">
-    <strong class="font-bold">Success!</strong>
-    <span class="block sm:inline">Your file is ready.</span>
-    <div class="mt-2">
-      <input type="text" [value]="downloadLink" readonly class="w-full p-2 border rounded bg-gray-50">
-      <button (click)="copyLink(downloadLink)" class="mt-2 bg-green-500 text-white px-4 py-1 rounded hover:bg-green-600">Copy Link</button>
-    </div>
+  <div *ngIf="uploadSuccess" class="mt-6 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
+    <strong class="font-bold">Upload Complete!</strong>
+    <span class="block sm:inline"> Your file has been successfully uploaded to our server and is now being processed. You can check your dashboard later for the shareable link.</span>
+    <button (click)="selectedFile = null; reset()" class="w-full mt-4 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600">
+      Upload Another File
+    </button>
   </div>
 </div>

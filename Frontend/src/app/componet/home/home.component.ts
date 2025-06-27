@@ -1,28 +1,46 @@
-import { HttpEventType, HttpResponse } from '@angular/common/http';
-import { Component } from '@angular/core';
-import { FileService } from '../../shared/services/file.service';
+import { Component, OnDestroy } from '@angular/core';
+import { UploadService } from '../../shared/services/upload.service';
+import { Subscription } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 
 @Component({
   selector: 'app-home',
   templateUrl: './home.component.html',
-  styleUrl: './home.component.css'
 })
-export class HomeComponent {
+export class HomeComponent implements OnDestroy {
   selectedFile: File | null = null;
   uploadProgress = 0;
   uploading = false;
-  downloadLink: string | null = null;
+  uploadSuccess = false;
+  private progressSub: Subscription;
 
-  constructor(private fileService: FileService, private snackBar: MatSnackBar) {}
+  constructor(private uploadService: UploadService, private snackBar: MatSnackBar) {
+    // Subscribe to progress updates from the service
+    this.progressSub = this.uploadService.uploadProgress$.subscribe({
+      next: (progress) => {
+        this.uploadProgress = progress;
+        if (progress === 100) {
+          this.uploading = false;
+          this.uploadSuccess = true;
+          this.snackBar.open('File upload complete!', 'Close', { duration: 3000 });
+        }
+      },
+      error: (err) => {
+        this.uploading = false;
+        this.snackBar.open(`Upload Failed: ${err}`, 'Close', { duration: 5000 });
+        this.reset();
+      }
+    });
+  }
 
   onFileSelected(event: any): void {
     this.selectedFile = event.target.files[0];
     this.reset();
   }
-  
+
   onDragOver(event: DragEvent) { event.preventDefault(); }
   onDragLeave(event: DragEvent) { event.preventDefault(); }
+
   onDrop(event: DragEvent) {
     event.preventDefault();
     if (event.dataTransfer?.files.length) {
@@ -35,37 +53,36 @@ export class HomeComponent {
     if (!this.selectedFile) return;
 
     this.uploading = true;
+    this.uploadSuccess = false;
     this.uploadProgress = 0;
-    this.downloadLink = null;
 
-    this.fileService.upload(this.selectedFile).subscribe({
-      next: (event: any) => {
-        if (event.type === HttpEventType.UploadProgress) {
-          this.uploadProgress = Math.round(100 * event.loaded / event.total!);
-        } else if (event instanceof HttpResponse) {
-          // This is the response from the FINAL call to our backend /finalize
-          this.downloadLink = window.location.origin + event.body.download_link;
-          this.uploading = false;
-          this.snackBar.open('Upload finalized!', 'Close', { duration: 3000 });
-        }
+    // The component's job is just to start the upload.
+    // The progress subscription will handle the rest.
+    this.uploadService.upload(this.selectedFile).subscribe({
+      next: () => {
+        console.log('Upload initiated successfully.');
       },
       error: (err) => {
-        console.error(err);
-        this.snackBar.open('Upload failed! Please check console and try again.', 'Close', { duration: 5000 });
-        this.reset();
+        // This error is for the initiation step only
+        this.uploading = false;
+        this.snackBar.open('Could not start upload. Please check the console.', 'Close', { duration: 3000 });
       }
     });
   }
-
-  copyLink(link: string) {
-    navigator.clipboard.writeText(link).then(() => {
-      this.snackBar.open('Link copied to clipboard!', 'Close', { duration: 2000 });
-    });
-  }
+  
+  // We no longer need a download link immediately, as the processing happens in the background
+  // The UI can be updated to reflect this.
 
   reset() {
     this.uploadProgress = 0;
-    this.downloadLink = null;
     this.uploading = false;
+    this.uploadSuccess = false;
+  }
+
+  ngOnDestroy(): void {
+    // Unsubscribe to prevent memory leaks
+    if (this.progressSub) {
+      this.progressSub.unsubscribe();
+    }
   }
 }

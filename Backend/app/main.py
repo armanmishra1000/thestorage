@@ -4,12 +4,16 @@ from app.api.v1 import routes_upload, routes_auth
 
 app = FastAPI(title="File Transfer Service")
 
-# CORS (Cross-Origin Resource Sharing)
-# This allows your Angular frontend (running on http://localhost:4200)
-# to communicate with your backend (running on http://localhost:8000).
+# This is the list of origins that are allowed to make requests.
+# Your Angular app is running on http://localhost:4200
+origins = [
+    "http://localhost:4200",
+]
+
+# This middleware will apply to both HTTP and WebSocket requests.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4200"],  # The origin of your frontend
+    allow_origins=origins,  # Crucially, we specify the allowed origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
