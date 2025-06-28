@@ -13,7 +13,7 @@ def get_drive_service():
     service = build('drive', 'v3', credentials=creds)
     return service
 
-def create_resumable_upload_session(filename: str) -> (str, str):
+def create_resumable_upload_session(filename: str, creds: service_account.Credentials) -> (str, str):
     """
     Creates a 0-byte placeholder file on Google Drive to get a stable file ID,
     then initiates a resumable upload session to update that file.

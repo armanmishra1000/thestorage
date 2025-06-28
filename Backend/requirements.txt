@@ -26,6 +26,8 @@ flask_admin
 Flask-WTF
 email_validator
 httpx
+celery
+redis
 
 # Database (for MongoDB BSON/ObjectId)
 pymongo
@@ -35,3 +37,7 @@ python-dateutil
 pytz
 # Keep python-telegram-bot if you still use bot.py separately
 python-telegram-bot==13.15
+fastapi
+passlib
+jose
+pydantic_settings

@@ -112,6 +112,7 @@ from app.services.auth_service import try_get_current_user, get_current_user
 from app.services.auth_service import get_current_user_optional
 from app.tasks.drive_uploader_task import parallel_upload_to_drive
 from fastapi import BackgroundTasks
+from app.tasks.drive_uploader_task import parallel_upload_to_drive
 router = APIRouter()
 ws_router = APIRouter()
 
@@ -186,20 +187,23 @@ async def websocket_upload(
                 bytes_written += len(message["bytes"])
     
     finally:
-        # This block will execute whether the loop breaks or an error occurs
-        f.close() # Make sure the file handle is closed
+        f.close()
         print(f"Client connection processing finished for {file_id}.")
         
-        # Now we check the file size and trigger the background task
         expected_size = file_doc.get("size_bytes", 0)
         
         if bytes_written == expected_size:
             db.files.update_one({"_id": file_id}, {"$set": {"status": UploadStatus.UPLOADED_TO_SERVER}})
-            print(f"File {file_id} successfully saved to {file_path}. Triggering Drive upload.")
+            print(f"File {file_id} successfully saved. Queuing Drive upload task.")
             
             filename = file_doc.get("filename", "untitled")
-            background_tasks.add_task(parallel_upload_to_drive, file_id, file_path, filename)
 
+            # --- THIS IS THE KEY CHANGE ---
+            # Send the task to the Celery queue instead of using BackgroundTasks
+            # We must convert the Path object to a string, as Celery messages must be serializable.
+            parallel_upload_to_drive.delay(file_id, str(file_path), filename)
+            # --- END OF CHANGE ---
+            
         else:
             db.files.update_one({"_id": file_id}, {"$set": {"status": UploadStatus.FAILED}})
             print(f"File {file_id} upload failed. Expected {expected_size}, got {bytes_written}.")
