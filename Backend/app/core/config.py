@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic_settings import BaseSettings
 import os
 
@@ -7,8 +8,13 @@ class Settings(BaseSettings):
     DATABASE_NAME: str
 
     # Google Drive
-    GOOGLE_DRIVE_FOLDER_ID: str
+    # GOOGLE_DRIVE_FOLDER_ID: str
     GOOGLE_APPLICATION_CREDENTIALS: str
+    
+    # NEW: Add the OAuth 2.0 credentials
+    GOOGLE_OAUTH_CREDENTIALS_PATH: str
+    GOOGLE_OAUTH_REFRESH_TOKEN: str
+    GOOGLE_DRIVE_FOLDER_ID: Optional[str] = None
 
     # Telegram
     TELEGRAM_BOT_TOKEN: str

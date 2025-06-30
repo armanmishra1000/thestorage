@@ -111,7 +111,7 @@ from pathlib import Path # Add this import for path handling
 from app.services.auth_service import try_get_current_user, get_current_user
 from app.services.auth_service import get_current_user_optional
 from fastapi import BackgroundTasks
-from app.tasks.drive_uploader_task import upload_drive_task
+from app.tasks.drive_uploader_task import oauth_resumable_upload
 
 router = APIRouter()
 ws_router = APIRouter()
@@ -201,7 +201,7 @@ async def websocket_upload(
             # --- THIS IS THE KEY CHANGE ---
             # Send the task to the Celery queue instead of using BackgroundTasks
             # We must convert the Path object to a string, as Celery messages must be serializable.
-            upload_drive_task.delay(file_id, str(file_path), filename)
+            oauth_resumable_upload.delay(file_id, str(file_path), filename)
             # --- END OF CHANGE ---
             
         else:
