@@ -1,4 +1,5 @@
 from celery import Celery
+from app.core.config import settings
 
 # Create a Celery instance.
 # The first argument is the name of the current module.
@@ -6,8 +7,8 @@ from celery import Celery
 # The 'backend' argument is where Celery stores task results (we'll also use Redis).
 celery_app = Celery(
     "tasks",
-    broker="redis://localhost:6379/0",
-    backend="redis://localhost:6379/0"
+    broker=settings.CELERY_BROKER_URL, # <-- Use the setting
+    backend=settings.CELERY_BROKER_URL # <-- Use the setting
 )
 
 # Tell Celery where to find our tasks.

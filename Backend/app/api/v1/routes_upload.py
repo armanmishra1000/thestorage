@@ -112,6 +112,9 @@ from app.services.auth_service import try_get_current_user, get_current_user
 from app.services.auth_service import get_current_user_optional
 from fastapi import BackgroundTasks
 from app.tasks.drive_uploader_task import oauth_resumable_upload
+import asyncio
+import redis.asyncio as aioredis
+from app.core.config import settings
 
 router = APIRouter()
 ws_router = APIRouter()
@@ -230,3 +233,45 @@ async def get_user_file_history(current_user: UserInDB = Depends(get_current_use
 @router.get("/download/{file_id}")
 async def download_file(file_id: str):
     raise HTTPException(status_code=501, detail="Download functionality not fully implemented.")
+
+
+@ws_router.websocket("/ws/progress/{file_id}")
+async def websocket_progress(websocket: WebSocket, file_id: str):
+    """
+    Acts as a bridge between Redis Pub/Sub and the frontend WebSocket.
+    """
+    await websocket.accept()
+    
+    # Create a new async redis connection
+    redis_conn = aioredis.from_url(settings.CELERY_BROKER_URL, decode_responses=True)
+    pubsub = redis_conn.pubsub()
+    channel_name = f"progress_{file_id}"
+    await pubsub.subscribe(channel_name)
+    
+    print(f"[PROGRESS_WS] Client connected and subscribed to {channel_name}")
+    
+    try:
+        while True:
+            # Listen for messages from Redis
+            message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=None)
+            if message:
+                data = message['data']
+                # Forward the message to the frontend client
+                await websocket.send_text(data)
+                print(f"[PROGRESS_WS] Forwarded message to client: {data}")
+                
+                # If the message is a success or error, we're done.
+                import json
+                if json.loads(data)['type'] in ['success', 'error']:
+                    break # Exit the loop
+            
+            # This small sleep prevents the loop from consuming 100% CPU if Redis is slow
+            await asyncio.sleep(0.01)
+
+    except WebSocketDisconnect:
+        print(f"[PROGRESS_WS] Client for {file_id} disconnected.")
+    finally:
+        # Clean up the subscription and connection
+        await pubsub.unsubscribe(channel_name)
+        await redis_conn.close()
+        print(f"[PROGRESS_WS] Unsubscribed and closed connection for {file_id}.")
