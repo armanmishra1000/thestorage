@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 # Import the two new routers we just configured
-from app.api.v1.routes_upload import router as http_router, ws_router
+from app.api.v1.routes_upload import router as http_upload_router, ws_router
 from app.api.v1 import routes_auth
+from app.api.v1 import routes_download
 
 # --- Create the MAIN application for HTTP requests ---
 app = FastAPI(title="File Transfer Service - HTTP")
@@ -23,7 +24,8 @@ app.add_middleware(
 
 # Include the standard HTTP routers
 app.include_router(routes_auth.router, prefix="/api/v1/auth", tags=["Authentication"])
-app.include_router(http_router, prefix="/api/v1", tags=["Files"])
+app.include_router(http_upload_router, prefix="/api/v1", tags=["Upload"])
+app.include_router(routes_download.router, prefix="/api/v1", tags=["Download"])
 
 @app.get("/")
 def read_root():
@@ -31,13 +33,6 @@ def read_root():
 
 
 # --- Create a SEPARATE sub-application for WebSockets ---
-# This app will have NO middleware, avoiding any conflicts.
 ws_app = FastAPI(title="File Transfer Service - WebSockets")
-
-# Include ONLY the WebSocket router in this sub-app
 ws_app.include_router(ws_router)
-
-
-# --- Mount the WebSocket sub-app onto the main app ---
-# This makes the WebSocket endpoints available under the main application's server process
 app.mount("/ws_api", ws_app)
