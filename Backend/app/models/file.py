@@ -48,6 +48,7 @@ class UploadStatus(str, Enum):
     UPLOADING_TO_SERVER = "uploading_to_server"
     UPLOADED_TO_SERVER = "uploaded_to_server"
     UPLOADING_TO_DRIVE = "uploading_to_drive"
+    TRANSFERRING_TO_TELEGRAM = "transferring_to_telegram"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -65,6 +66,7 @@ class FileMetadataCreate(FileMetadataBase):
     # NEW: The status field
     status: UploadStatus = UploadStatus.PENDING
     gdrive_id: Optional[str] = None
+    telegram_message_ids: Optional[List[int]] = None
     owner_id: Optional[str] = None
 
 class FileMetadataInDB(FileMetadataBase):

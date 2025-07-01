@@ -6,7 +6,7 @@ from celery import Celery
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload # Import the official helper
-
+from app.tasks.telegram_transfer_task import transfer_drive_to_telegram
 from app.celery_worker import celery_app
 from app.core.config import settings
 from app.db.mongodb import db
@@ -91,13 +91,20 @@ def oauth_resumable_upload(file_id: str, file_path_str: str, filename: str):
 
         # 4. FINALIZE DATABASE
         db.files.update_one(
-            {"_id": file_id},
-            {"$set": {"status": UploadStatus.COMPLETED, "storage_location": "gdrive", "gdrive_id": gdrive_id}}
-        )
-        print(f"[CELERY_WORKER] Successfully finalized {file_id} in database.")
+                {"_id": file_id},
+                {"$set": {"status": "gdrive_completed", "storage_location": "gdrive", "gdrive_id": gdrive_id}} # We'll use a more specific status
+            )
+        print(f"[CELERY_WORKER] Successfully finalized GDrive upload for {file_id}.")
         
         progress_manager.publish_success(download_link)
 
+        
+        # --- THIS IS THE NEW LINE ---
+            # Now, trigger the next task in the chain
+        print(f"[CELERY_WORKER] Queuing task to transfer {file_id} to Telegram.")
+        transfer_drive_to_telegram.delay(file_id=file_id, gdrive_id=gdrive_id)
+            # --- END OF NEW LINE ---
+        
     except Exception as e:
         error_msg = f"Upload failed: {str(e)}"
         print(f"!!! [CELERY_WORKER] Upload FAILED for {file_id}: {error_msg}")
