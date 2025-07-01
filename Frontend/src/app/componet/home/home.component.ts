@@ -94,116 +94,95 @@ import { UploadService } from '../../shared/services/upload.service'; // Adjust 
 import { Subscription } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 
-// Define the different states our component can be in for clean UI management
-type UploadState = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
+// Define the different states our component can be in
+type UploadState = 'idle' | 'selected' | 'uploading' | 'success' | 'error';
 
 @Component({
   selector: 'app-home',
   templateUrl: './home.component.html',
 })
 export class HomeComponent implements OnDestroy {
-  // State management
+  // --- State Management ---
   public currentState: UploadState = 'idle';
   public selectedFile: File | null = null;
-  private lastFileId = '';
   
-  // Progress tracking
+  // --- Progress & Result ---
   public browserUploadProgress = 0;
-  public serverProcessingProgress = 0;
-  
-  // Final result
   public finalDownloadLink: string | null = null;
   public errorMessage: string | null = null;
 
-  // Subscriptions to manage
-  private uploadInitiationSub?: Subscription;
-  private browserProgressSub?: Subscription;
-  private serverProgressSub?: Subscription;
+  // --- Subscriptions ---
+  private uploadSub?: Subscription;
+  private progressSub?: Subscription;
 
   constructor(private uploadService: UploadService, private snackBar: MatSnackBar) {}
 
   onFileSelected(event: any): void {
     const fileList = (event.target as HTMLInputElement).files;
     if (fileList && fileList.length > 0) {
-        this.selectedFile = fileList[0];
-        this.reset();
+      this.selectedFile = fileList[0];
+      this.reset();
+      this.currentState = 'selected';
     }
   }
 
   onUpload(): void {
     if (!this.selectedFile) return;
 
-    this.reset();
     this.currentState = 'uploading';
+    let fileId = ''; // Variable to hold the ID for this upload
 
-    // ---- STAGE 1: BROWSER-TO-SERVER UPLOAD ----
-    // Subscribe to the progress of the first hop
-    this.browserProgressSub = this.uploadService.browserUploadProgress$.subscribe({
-        next: progress => this.browserUploadProgress = progress,
+    // Subscribe to progress updates first
+    this.progressSub = this.uploadService.browserUploadProgress$.subscribe({
+        next: progress => {
+            this.browserUploadProgress = progress;
+        },
         error: err => {
             this.currentState = 'error';
             this.errorMessage = err;
         },
         complete: () => {
-            // When the browser upload is 100% complete, switch to the next stage
-            this.currentState = 'processing';
-            // We use the fileId captured from the initiation call
-            this.listenForServerProgress(this.lastFileId);
+            // This 'complete' now fires when the browser-to-server part is done.
+            // At this point, the Celery task is running in the background.
+            // We can now show the success message and the link to the user.
+            this.currentState = 'success';
+            this.snackBar.open('File upload complete! Your link is ready.', 'Close', { duration: 3000 });
         }
     });
 
-    // Initiate the upload process. This call returns the fileId we need.
-    let lastFileId = '';
-    this.uploadInitiationSub = this.uploadService.upload(this.selectedFile).subscribe({
+    // Initiate the upload process. The most important part is getting the fileId.
+    this.uploadSub = this.uploadService.upload(this.selectedFile).subscribe({
       next: (response) => {
-        this.lastFileId = response.file_id; // <-- USE "this." here
-        console.log(`Upload initiated. File ID: ${this.lastFileId}`);
+        fileId = response.file_id;
+        console.log(`Upload initiated. File ID: ${fileId}`);
+        
+        // ** THE FIX IS HERE: Construct the final link immediately **
+        this.finalDownloadLink = `${window.location.origin}/download/${fileId}`;
       },
       error: (err) => {
         this.currentState = 'error';
         this.errorMessage = 'Could not start upload. Is the server running?';
-      }
-    });
-  }
-
-  // ---- STAGE 2: SERVER-TO-DRIVE PROGRESS ----
-  listenForServerProgress(fileId: string): void {
-    if (!fileId) {
-        this.currentState = 'error';
-        this.errorMessage = 'File ID was not received. Cannot track progress.';
-        return;
-    }
-    
-    this.serverProgressSub = this.uploadService.listenForServerProgress(fileId).subscribe({
-      next: (message) => {
-        if (message.type === 'progress') {
-          this.serverProcessingProgress = message.value;
-        } else if (message.type === 'success') {
-          this.currentState = 'success';
-          this.finalDownloadLink = message.value;
-          this.snackBar.open('File is ready!', 'Close', { duration: 5000 });
-        } else if (message.type === 'error') {
-          this.currentState = 'error';
-          this.errorMessage = message.value;
-        }
-      },
-      error: (err) => {
-        this.currentState = 'error';
-        this.errorMessage = 'Lost connection to server during processing.';
+        this.progressSub?.unsubscribe(); // Clean up progress sub on initiation error
       }
     });
   }
 
   reset(): void {
-    this.currentState = this.selectedFile ? 'idle' : 'idle';
     this.browserUploadProgress = 0;
-    this.serverProcessingProgress = 0;
     this.finalDownloadLink = null;
     this.errorMessage = null;
-    // Unsubscribe from all potential subscriptions to prevent memory leaks
-    this.uploadInitiationSub?.unsubscribe();
-    this.browserProgressSub?.unsubscribe();
-    this.serverProgressSub?.unsubscribe();
+
+    // Set state based on whether a file is selected
+    this.currentState = this.selectedFile ? 'selected' : 'idle';
+    
+    // Unsubscribe from all potential subscriptions
+    this.uploadSub?.unsubscribe();
+    this.progressSub?.unsubscribe();
+  }
+
+  startNewUpload(): void {
+    this.selectedFile = null;
+    this.reset();
   }
 
   copyLink(link: string): void {
@@ -217,13 +196,16 @@ export class HomeComponent implements OnDestroy {
   onDragLeave(event: DragEvent) { event.preventDefault(); }
   onDrop(event: DragEvent) {
     event.preventDefault();
-    if (event.dataTransfer?.files.length) {
+    if (this.currentState !== 'uploading' && event.dataTransfer?.files.length) {
       this.selectedFile = event.dataTransfer.files[0];
       this.reset();
+      this.currentState = 'selected';
     }
   }
 
   ngOnDestroy(): void {
-    this.reset();
+    // Final cleanup when the component is destroyed
+    this.uploadSub?.unsubscribe();
+    this.progressSub?.unsubscribe();
   }
 }
