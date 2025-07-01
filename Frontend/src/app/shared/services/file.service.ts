@@ -12,6 +12,7 @@ const API_URL = 'http://localhost:8000/api/v1';
 export class FileService {
   [x: string]: any;
 
+  private apiUrl = 'http://localhost:5000/api/v1';
   constructor(private http: HttpClient) { }
 
   // --- THE NEW UPLOAD METHOD ---
@@ -55,12 +56,12 @@ export class FileService {
   }
 
   // --- Other methods remain the same ---
-  getFileInfo(id: string): Observable<any> {
-    return this.http.get(`${API_URL}/files/${id}`);
+  getFileMeta(id: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/files/${id}/meta`);
   }
 
-  getDownloadUrl(id: string): string {
-    return `${API_URL}/download/${id}`;
+  getStreamUrl(id: string): string {
+    return `${this.apiUrl}/download/stream/${id}`;
   }
 
   getUserFiles(): Observable<any> {
