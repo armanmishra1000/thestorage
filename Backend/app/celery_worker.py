@@ -14,10 +14,10 @@ celery_app = Celery(
 # Tell Celery where to find our tasks.
 # It will look for a 'tasks' variable inside the 'drive_uploader_task' module.
 celery_app.conf.update(
+    # Add the new task module to the list of imports
     imports=(
         'app.tasks.drive_uploader_task',
-        # NEW: Add the new task module here
-        'app.tasks.telegram_transfer_task',
+        'app.tasks.telegram_uploader_task'  
     ),
     task_track_started=True
 )

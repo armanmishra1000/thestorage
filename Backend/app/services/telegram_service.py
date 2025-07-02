@@ -86,63 +86,109 @@
 #         pass # We will replace this entire service file below.
 
 
+# import httpx
+# from typing import AsyncGenerator, List, Dict
+# from app.core.config import settings
+
+# TELEGRAM_API_URL = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}"
+
+# # THIS IS NOW CORRECT
+# async def upload_chunk_to_telegram(chunk: bytes, filename: str) -> Dict[str, any]:
+#     """
+#     Uploads a chunk and returns the full message object, which contains the crucial file_id.
+#     """
+#     async with httpx.AsyncClient(timeout=60.0) as client:
+#         url = f"{TELEGRAM_API_URL}/sendDocument"
+#         params = {'chat_id': settings.TELEGRAM_CHANNEL_ID}
+#         files = {'document': (filename, chunk, 'application/octet-stream')}
+        
+#         response = await client.post(url, params=params, files=files)
+#         response.raise_for_status()
+#         data = response.json()
+        
+#         if data.get("ok"):
+#             # Return the entire 'document' part of the result
+#             return data['result']['document']
+#         else:
+#             raise Exception(f"Telegram API Error: {data.get('description')}")
+
+# async def get_file_path(file_id: str) -> str:
+#     """Gets the internal file_path from a file_id."""
+#     async with httpx.AsyncClient(timeout=30.0) as client:
+#         url = f"{TELEGRAM_API_URL}/getFile"
+#         params = {'file_id': file_id}
+#         response = await client.get(url, params=params)
+#         response.raise_for_status()
+#         data = response.json()
+#         if data.get("ok"):
+#             return data['result']['file_path']
+#         else:
+#             raise Exception(f"Telegram getFile Error: {data.get('description')}")
+
+# async def stream_file_from_telegram(file_ids: List[str]) -> AsyncGenerator[bytes, None]:
+#     """
+#     Accepts a list of Telegram file_ids, fetches each one, and streams its content.
+#     """
+#     print(f"[TELEGRAM_SERVICE] Streaming {len(file_ids)} chunks from Telegram.")
+#     for file_id in file_ids:
+#         try:
+#             file_path = await get_file_path(file_id)
+#             download_url = f"https://api.telegram.org/file/bot{settings.TELEGRAM_BOT_TOKEN}/{file_path}"
+            
+#             async with httpx.AsyncClient(timeout=60.0) as client:
+#                 async with client.stream("GET", download_url) as response:
+#                     response.raise_for_status()
+#                     async for chunk in response.aiter_bytes():
+#                         yield chunk
+#             print(f"[TELEGRAM_SERVICE] Finished streaming chunk with file_id: {file_id}")
+#         except Exception as e:
+#             print(f"!!! [TELEGRAM_SERVICE] Failed to stream chunk {file_id}: {e}")
+#             # In a real app, you might want to handle this more gracefully
+#             # For now, it will just stop the download.
+#             break
+
+
+
 import httpx
-from typing import AsyncGenerator, List, Dict
 from app.core.config import settings
 
+# Define the base API URL for the Telegram bot
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}"
+# Define a safe chunk size, slightly less than the 20MB technical limit.
+TELEGRAM_CHUNK_SIZE_BYTES = 15 * 1024 * 1024
 
-# THIS IS NOW CORRECT
-async def upload_chunk_to_telegram(chunk: bytes, filename: str) -> Dict[str, any]:
+async def upload_file_chunk(chunk_data: bytes, filename: str) -> int:
     """
-    Uploads a chunk and returns the full message object, which contains the crucial file_id.
+    Uploads a single binary chunk as a document to the designated Telegram channel.
+    
+    Args:
+        chunk_data: The binary content of the file chunk.
+        filename: The name to give the document in Telegram.
+
+    Returns:
+        The message_id of the uploaded document in the channel.
     """
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=120.0) as client:
         url = f"{TELEGRAM_API_URL}/sendDocument"
+        
         params = {'chat_id': settings.TELEGRAM_CHANNEL_ID}
-        files = {'document': (filename, chunk, 'application/octet-stream')}
         
-        response = await client.post(url, params=params, files=files)
-        response.raise_for_status()
-        data = response.json()
+        # Prepare the file for multipart upload
+        files = {'document': (filename, chunk_data, 'application/octet-stream')}
         
-        if data.get("ok"):
-            # Return the entire 'document' part of the result
-            return data['result']['document']
-        else:
-            raise Exception(f"Telegram API Error: {data.get('description')}")
-
-async def get_file_path(file_id: str) -> str:
-    """Gets the internal file_path from a file_id."""
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        url = f"{TELEGRAM_API_URL}/getFile"
-        params = {'file_id': file_id}
-        response = await client.get(url, params=params)
-        response.raise_for_status()
-        data = response.json()
-        if data.get("ok"):
-            return data['result']['file_path']
-        else:
-            raise Exception(f"Telegram getFile Error: {data.get('description')}")
-
-async def stream_file_from_telegram(file_ids: List[str]) -> AsyncGenerator[bytes, None]:
-    """
-    Accepts a list of Telegram file_ids, fetches each one, and streams its content.
-    """
-    print(f"[TELEGRAM_SERVICE] Streaming {len(file_ids)} chunks from Telegram.")
-    for file_id in file_ids:
         try:
-            file_path = await get_file_path(file_id)
-            download_url = f"https://api.telegram.org/file/bot{settings.TELEGRAM_BOT_TOKEN}/{file_path}"
+            print(f"[TELEGRAM_SERVICE] Uploading chunk '{filename}' to channel {settings.TELEGRAM_CHANNEL_ID}...")
+            response = await client.post(url, params=params, files=files)
+            response.raise_for_status()  # Raise an exception for HTTP 4xx/5xx errors
             
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                async with client.stream("GET", download_url) as response:
-                    response.raise_for_status()
-                    async for chunk in response.aiter_bytes():
-                        yield chunk
-            print(f"[TELEGRAM_SERVICE] Finished streaming chunk with file_id: {file_id}")
-        except Exception as e:
-            print(f"!!! [TELEGRAM_SERVICE] Failed to stream chunk {file_id}: {e}")
-            # In a real app, you might want to handle this more gracefully
-            # For now, it will just stop the download.
-            break
+            data = response.json()
+            if data.get('ok'):
+                message_id = data['result']['message_id']
+                print(f"[TELEGRAM_SERVICE] Chunk uploaded successfully. Message ID: {message_id}")
+                return message_id
+            else:
+                raise Exception(f"Telegram API Error: {data.get('description', 'Unknown error')}")
+
+        except httpx.RequestError as e:
+            print(f"!!! [TELEGRAM_SERVICE] HTTP request failed: {e}")
+            raise

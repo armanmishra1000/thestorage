@@ -104,6 +104,7 @@ from google.oauth2 import service_account
 from fastapi.concurrency import run_in_threadpool   
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from google.oauth2.credentials import Credentials
 from app.core.config import settings
 import io
 from typing import AsyncGenerator
@@ -303,11 +304,84 @@ async def stream_gdrive_file(file_id: str) -> AsyncGenerator[bytes, None]:
     download_thread.join() # Wait for the thread to finish cleanly.
     reader.close()
     
-# --- Kept for potential future use or alternative implementations ---
-def delete_file_from_gdrive(file_id: str):
+# --- NEW FUNCTION FOR DELETION USING OAUTH REFRESH TOKEN ---
+def delete_file_with_refresh_token(file_id: str):
+    """
+    Deletes a file from Google Drive using a user's OAuth 2.0 refresh token.
+    This is more robust for permissions than a service account sometimes.
+    """
     try:
-        service = get_drive_service()
+        print(f"[GDRIVE_DELETER] Attempting to delete file {file_id} using user credentials.")
+        
+        # 1. Build credentials from the stored refresh token
+        user_creds = Credentials.from_authorized_user_info(
+            info={
+                "client_id": settings.OAUTH_CLIENT_ID,
+                "client_secret": settings.OAUTH_CLIENT_SECRET,
+                "refresh_token": settings.OAUTH_REFRESH_TOKEN,
+            },
+            scopes=SCOPES
+        )
+
+        # 2. Build the service with the user's credentials
+        service = get_drive_service(creds=user_creds)
+
+        # 3. Execute the deletion
         service.files().delete(fileId=file_id).execute()
-        print(f"Successfully deleted file {file_id} from Google Drive.")
-    except HttpError as error:
-        print(f"An error occurred while deleting from GDrive: {error}")
+        
+        print(f"[GDRIVE_DELETER] Successfully deleted file {file_id}.")
+
+    except HttpError as e:
+        print(f"!!! [GDRIVE_DELETER] Google API HTTP Error during deletion: {e.content}")
+        # We don't re-raise here to prevent the whole task from failing if only deletion fails
+    except Exception as e:
+        print(f"!!! [GDRIVE_DELETER] An unexpected error occurred during deletion: {e}")
+        
+        
+        
+# ... (at the end of the file, after delete_file_with_refresh_token)
+
+def download_file_from_gdrive(gdrive_id: str) -> io.BytesIO:
+    """
+    Downloads a file from Google Drive into an in-memory BytesIO object.
+    Uses the OAuth 2.0 refresh token to ensure correct permissions.
+    """
+    try:
+        print(f"[GDRIVE_DOWNLOADER] Downloading file {gdrive_id} using user credentials.")
+        
+        # 1. Build credentials from the stored refresh token
+        user_creds = Credentials.from_authorized_user_info(
+            info={
+                "client_id": settings.OAUTH_CLIENT_ID,
+                "client_secret": settings.OAUTH_CLIENT_SECRET,
+                "refresh_token": settings.OAUTH_REFRESH_TOKEN,
+            },
+            scopes=SCOPES
+        )
+
+        # 2. Build the service with the user's credentials
+        service = get_drive_service(creds=user_creds)
+        
+        # 3. Prepare the download request
+        request = service.files().get_media(fileId=gdrive_id)
+        
+        # 4. Download the content into an in-memory binary stream
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+            print(f"[GDRIVE_DOWNLOADER] Download progress: {int(status.progress() * 100)}%.")
+        
+        # Reset the stream's position to the beginning so it can be read
+        fh.seek(0)
+        print(f"[GDRIVE_DOWNLOADER] File {gdrive_id} downloaded successfully.")
+        return fh
+
+    except HttpError as e:
+        print(f"!!! [GDRIVE_DOWNLOADER] Google API HTTP Error during download: {e.content}")
+        raise e
+    except Exception as e:
+        print(f"!!! [GDRIVE_DOWNLOADER] An unexpected error occurred during download: {e}")
+        raise
