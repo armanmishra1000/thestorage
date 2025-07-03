@@ -154,14 +154,15 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, Subject, throwError, Observer } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
+import { environment } from '../../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
 })
 export class UploadService {
   // URLs for backend services
-  private apiUrl = 'http://localhost:5000/api/v1';
-  private wsUrl = 'ws://localhost:5000/ws_api/ws';
+  private apiUrl = environment.apiUrl;
+  private wsUrl = environment.wsUrl;
 
   // Subject for the initial BROWSER-TO-SERVER upload progress
   private browserUploadProgress = new Subject<number>();
@@ -174,11 +175,12 @@ export class UploadService {
    * @param file The file to upload.
    * @returns An Observable that emits the file_id upon successful initiation.
    */
-  public upload(file: File): Observable<{ file_id: string }> {
+  public upload(file: File, batchId: string): Observable<{ file_id: string }> {
     const fileInfo = {
       filename: file.name,
       size: file.size,
-      content_type: file.type || 'application/octet-stream'
+      content_type: file.type || 'application/octet-stream',
+      batch_id: batchId // <-- Add the batch_id here
     };
 
     return this.initiateUpload(fileInfo).pipe(
