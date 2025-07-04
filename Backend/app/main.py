@@ -11,7 +11,7 @@ app = FastAPI(title="File Transfer Service - HTTP")
 # This is the list of origins that are allowed to make requests.
 origins = [
     "http://localhost:4200",
-    "https://mitali-frontend.vercel.app",
+    "https://frontend-8opz7jtnb-emmagarrrs-projects.vercel.app",
 ]
 
 # Add the CORS middleware ONLY to the main HTTP app
