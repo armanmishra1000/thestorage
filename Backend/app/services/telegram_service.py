@@ -168,7 +168,7 @@ async def upload_file_chunk(chunk_data: bytes, filename: str) -> int:
     Returns:
         The message_id of the uploaded document in the channel.
     """
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=900.0) as client:
         url = f"{TELEGRAM_API_URL}/sendDocument"
         
         params = {'chat_id': settings.TELEGRAM_CHANNEL_ID}
