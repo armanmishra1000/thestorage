@@ -416,7 +416,7 @@ from app.db.mongodb import db
 from app.models.file import UploadStatus, StorageLocation
 from app.progress_manager import ProgressManager
 
-@celery_app.task(name="tasks.transfer_to_telegram")
+@celery_app.task(name="tasks.transfer_to_telegram", queue="archive_queue")
 def transfer_to_telegram(gdrive_id: str, file_id: str) -> list[str]:
     """
     Downloads from GDrive, uploads to Telegram, and returns a list of Telegram file_ids.
@@ -460,7 +460,7 @@ def transfer_to_telegram(gdrive_id: str, file_id: str) -> list[str]:
         progress.publish_error(f"Failed during Telegram archival: {e}")
         raise
 
-@celery_app.task(name="tasks.finalize_and_delete")
+@celery_app.task(name="tasks.finalize_and_delete", queue="archive_queue")
 def finalize_and_delete(telegram_file_ids: list[str], file_id: str, gdrive_id: str):
     """
     This is the final, silent task. It updates the DB to point to Telegram

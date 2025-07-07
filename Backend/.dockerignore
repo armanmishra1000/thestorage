@@ -1,0 +1,16 @@
+# Ignore the Python virtual environment if it's inside the backend folder
+.venv/
+venv/
+
+# Ignore Git directory
+.git/
+.gitignore
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore local development files
+.env
