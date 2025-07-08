@@ -256,11 +256,29 @@ async def stream_gdrive_file(file_id: str) -> AsyncGenerator[bytes, None]:
     def download_in_thread():
         """
         This function runs in a separate thread. It performs the standard,
-        blocking download using the correct Google API client methods.
+        blocking download using the correct Google API client methods and,
+        crucially, the correct USER credentials.
         """
+        # --- FIX: Robustly handle cleanup in case of an error ---
+        writer = None
         try:
             print("[DOWNLOAD_THREAD] Starting download...")
-            service = get_drive_service()
+
+            # --- FIX: Authenticate as the USER using the OAuth 2.0 Refresh Token ---
+            # This is the same method used successfully by your other tasks.
+            user_creds = Credentials.from_authorized_user_info(
+                info={
+                    "client_id": settings.OAUTH_CLIENT_ID,
+                    "client_secret": settings.OAUTH_CLIENT_SECRET,
+                    "refresh_token": settings.OAUTH_REFRESH_TOKEN,
+                },
+                scopes=SCOPES
+            )
+            
+            # Build the service using the user's credentials, NOT the default service account.
+            service = get_drive_service(creds=user_creds)
+            # --- END OF AUTHENTICATION FIX ---
+
             request = service.files().get_media(fileId=file_id)
             
             # This is the writer end of our in-memory pipe
@@ -279,11 +297,13 @@ async def stream_gdrive_file(file_id: str) -> AsyncGenerator[bytes, None]:
 
             print("[DOWNLOAD_THREAD] Download finished.")
         except Exception as e:
+            # This will now correctly log authentication errors or any other issues.
             print(f"!!! [DOWNLOAD_THREAD] Error: {e}")
         finally:
-            # IMPORTANT: Close the writer to signal the end of the stream
-            # to the reader on the other side of the pipe.
-            writer.close()
+            # --- FIX: Ensure the writer is closed only if it was created ---
+            # This prevents the UnboundLocalError.
+            if writer:
+                writer.close()
 
     # Start the download function in a separate, daemonized thread.
     download_thread = threading.Thread(target=download_in_thread, daemon=True)
