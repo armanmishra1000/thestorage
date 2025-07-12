@@ -65,6 +65,12 @@ app = FastAPI(title="File Transfer Service")
 origins = [
     "http://localhost:4200",
     "https://thestorage.vercel.app",
+    # Allow all subdomains of mfcnextgen.com
+    "https://*.mfcnextgen.com",
+    "http://*.mfcnextgen.com",
+    # Also include the root domain
+    "https://mfcnextgen.com",
+    "http://mfcnextgen.com"
 ]
 
 app.add_middleware(
