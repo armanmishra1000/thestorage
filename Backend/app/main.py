@@ -64,7 +64,7 @@ app = FastAPI(title="File Transfer Service")
 
 origins = [
     "http://localhost:4200",
-    "https://teletransfer.vercel.app"
+    "https://thestorage.vercel.app",
 ]
 
 app.add_middleware(
