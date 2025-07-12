@@ -47,6 +47,9 @@ node_modules/
 # Build files
 build/
 
+# Frontend directory
+frontend/
+
 # OS generated files
 .DS_Store
 .DS_Store?

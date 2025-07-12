@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: directdrive-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false # This will be set manually in Render dashboard
+      - key: HETZNER_HOST
+        sync: false
+      - key: HETZNER_USERNAME
+        sync: false
+      - key: HETZNER_PASSWORD
+        sync: false
+      - key: HETZNER_BASE_PATH
+        value: /files
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: JWT_ALGORITHM
+        value: "HS256"
+      - key: JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "1440" # 24 hours
+    healthCheckPath: /healthz
+    autoDeploy: true

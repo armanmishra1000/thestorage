@@ -5,24 +5,26 @@ import os
 class Settings(BaseSettings):
     # MongoDB
     MONGODB_URI: str
-    DATABASE_NAME: str
+    DATABASE_NAME: str = "directdrive"
 
-    # Telegram
-    TELEGRAM_BOT_TOKEN: str
-    TELEGRAM_CHANNEL_ID: str
+    # API Configuration
+    API_HOST: str = "api.mfcnextgen.com"
+    PORT: int = 5000
+    CORS_ORIGINS: str = "*"
 
-    # JWT
-    JWT_SECRET_KEY: str
-    JWT_ALGORITHM: str
-    ACCESS_TOKEN_EXPIRE_MINUTES: int
+    # JWT (disabled but kept for future use)
+    JWT_SECRET_KEY: Optional[str] = None
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     
-    # NEW: OAuth 2.0 Credentials
-    OAUTH_CLIENT_ID: str
-    OAUTH_CLIENT_SECRET: str
-    OAUTH_REFRESH_TOKEN: str
-    GOOGLE_DRIVE_FOLDER_ID: Optional[str] = None
+    # Hetzner Storage-Box WebDAV
+    HETZNER_HOST: str
+    HETZNER_USER: str
+    HETZNER_PASSWORD: str
+    HETZNER_BASE_PATH: str = "/"
     
-    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    # Download configuration
+    DOWNLOAD_DOMAIN: str = "dl.mfcnextgen.com"
 
     class Config:
         env_file = ".env"
