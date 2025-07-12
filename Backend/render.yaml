@@ -11,12 +11,12 @@ services:
         sync: false # This will be set manually in Render dashboard
       - key: HETZNER_HOST
         sync: false
-      - key: HETZNER_USERNAME
+      - key: HETZNER_USER
         sync: false
       - key: HETZNER_PASSWORD
         sync: false
       - key: HETZNER_BASE_PATH
-        value: /files
+        value: /
       - key: CORS_ORIGINS
         value: "*"
       - key: JWT_SECRET_KEY
