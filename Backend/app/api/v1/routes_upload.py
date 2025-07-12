@@ -3,6 +3,7 @@ Upload routes for DirectDrive backend.
 MVP version with Hetzner Storage-Box only (no Google Drive or Telegram).
 """
 import uuid
+import os
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends, Request, UploadFile, File
@@ -81,12 +82,14 @@ async def upload_file(
         
         # For local testing, use local download endpoint instead of Cloudflare Worker domain
         # Check if we're in a local development environment
-        if settings.PORT != 443:  # Not production
-            # Hardcode port 5002 since that's what the server is actually running on
-            share_url = f"http://localhost:5002/api/v1/files/download/{remote_path}"
-        else:
+        # In production (Render), the environment variable 'RENDER' is set
+        if os.environ.get('RENDER', '').lower() == 'true':
             # Production URL using Cloudflare Worker domain
             share_url = f"https://{settings.DOWNLOAD_DOMAIN}/{remote_path}"
+        else:
+            # Local development URL
+            # Hardcode port 5002 since that's what the server is actually running on locally
+            share_url = f"http://localhost:5002/api/v1/files/download/{remote_path}"
         
         return {
             "file_id": file_id,
