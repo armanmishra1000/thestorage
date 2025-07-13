@@ -125,7 +125,7 @@ class HetznerWebDAVClient:
             print(f"Error uploading file: {e}")
             return False
 
-    async def upload_file_async(self, file_stream: BinaryIO, remote_path: str) -> bool:
+    async def upload_file_async(self, file_stream: BinaryIO, remote_path: str, file_id: str = "") -> bool:
         """
         Upload a file to Hetzner Storage-Box or local storage asynchronously.
         
@@ -154,17 +154,47 @@ class HetznerWebDAVClient:
                 print(f"[DEBUG] WebDAV User: {self.user}")
                 print(f"[DEBUG] WebDAV Password length: {len(self.password) if self.password else 0}")
                 
+                # Import logging utils here to avoid circular imports
+                from app.utils.logging_utils import log_chunk_metrics
+                
                 # Stream the file to Hetzner in chunks to avoid memory issues
                 async with aiohttp.ClientSession() as session:
                     # Create a custom async generator to stream data
                     async def file_stream_generator():
                         chunk_size = 1024 * 1024  # 1MB chunks
+                        chunk_number = 0
+                        total_bytes = 0
+                        
                         while True:
                             chunk = file_stream.read(chunk_size)
                             if not chunk:
                                 break
+                                
+                            chunk_number += 1
+                            chunk_bytes = len(chunk)
+                            total_bytes += chunk_bytes
+                            
+                            # Log chunk metrics every 10 chunks or for large chunks
+                            if chunk_number % 10 == 0 or chunk_bytes > 5 * 1024 * 1024:  # Log every 10 chunks or chunks > 5MB
+                                log_chunk_metrics(
+                                    chunk_number=chunk_number,
+                                    chunk_size=chunk_bytes,
+                                    file_id=file_id,
+                                    remote_path=remote_path
+                                )
+                                
                             yield chunk
-                    
+                        
+                        # Log final chunk metrics
+                        log_chunk_metrics(
+                            chunk_number=chunk_number,
+                            chunk_size=0,  # Final chunk
+                            total_chunks=chunk_number,
+                            file_id=file_id,
+                            remote_path=remote_path
+                        )
+                        print(f"[DEBUG] Total chunks: {chunk_number}, Total bytes: {total_bytes}")
+
                     # Use aiohttp's streaming upload capability
                     async with session.put(
                         webdav_url, 
