@@ -51,6 +51,7 @@ from starlette.responses import JSONResponse
 # Import routers
 from app.api.v1.routes_upload import router as upload_router
 from app.api.v1 import routes_auth, routes_download
+from app.api.v1.routes_logs import router as logs_router
 
 # Import middleware
 from app.middleware.rate_limiter import RateLimitMiddleware
@@ -90,6 +91,7 @@ app.add_middleware(
 app.include_router(routes_auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(upload_router, prefix="/api/v1", tags=["Upload"])
 app.include_router(routes_download.router, prefix="/api/v1", tags=["Download"])
+app.include_router(logs_router, prefix="/api/v1", tags=["Logging"])
 
 # Health check endpoint
 @app.get("/healthz")
