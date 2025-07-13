@@ -71,12 +71,16 @@ class HetznerWebDAVClient:
         """
         try:
             if self.is_production:
-                # In production, upload to Hetzner via WebDAV
-                # Read the entire file into memory (not ideal for large files)
-                file_content = file_stream.read()
-                
+                # In production, upload to Hetzner via WebDAV using streaming
                 # Create the WebDAV URL
                 webdav_url = f"{self.base_url}{self.base_path}/{remote_path}"
+                
+                # Debug information to help diagnose authentication issues
+                print(f"[DEBUG] WebDAV URL: {webdav_url}")
+                print(f"[DEBUG] WebDAV Host: {self.host}")
+                print(f"[DEBUG] WebDAV User: {self.user}")
+                print(f"[DEBUG] WebDAV Password length: {len(self.password) if self.password else 0}")
+                print(f"[DEBUG] WebDAV Base Path: {self.base_path}")
                 
                 # Create basic auth header
                 auth = base64.b64encode(f"{self.user}:{self.password}".encode()).decode()
@@ -85,9 +89,21 @@ class HetznerWebDAVClient:
                     "Content-Type": "application/octet-stream"
                 }
                 
-                # Make a synchronous request to upload the file
+                # Import requests here to avoid global import
                 import requests
-                response = requests.put(webdav_url, data=file_content, headers=headers)
+                
+                # Use a streaming upload approach to avoid loading the entire file into memory
+                # This creates a generator that reads the file in chunks
+                def file_stream_generator():
+                    chunk_size = 1024 * 1024  # 1MB chunks
+                    while True:
+                        chunk = file_stream.read(chunk_size)
+                        if not chunk:
+                            break
+                        yield chunk
+                        
+                # Use the streaming generator with requests
+                response = requests.put(webdav_url, data=file_stream_generator(), headers=headers)
                 
                 if response.status_code in (201, 204):
                     print(f"[PRODUCTION MODE] File uploaded to Hetzner: {webdav_url}")
@@ -133,20 +149,29 @@ class HetznerWebDAVClient:
                     "Content-Type": "application/octet-stream"
                 }
                 
+                # Debug information to help diagnose authentication issues
+                print(f"[DEBUG] WebDAV URL: {webdav_url}")
+                print(f"[DEBUG] WebDAV User: {self.user}")
+                print(f"[DEBUG] WebDAV Password length: {len(self.password) if self.password else 0}")
+                
                 # Stream the file to Hetzner in chunks to avoid memory issues
                 async with aiohttp.ClientSession() as session:
-                    # Read in chunks to avoid loading entire file into memory
-                    chunk_size = 1024 * 1024  # 1MB chunks
+                    # Create a custom async generator to stream data
+                    async def file_stream_generator():
+                        chunk_size = 1024 * 1024  # 1MB chunks
+                        while True:
+                            chunk = file_stream.read(chunk_size)
+                            if not chunk:
+                                break
+                            yield chunk
                     
-                    # Create a buffer to collect chunks
-                    buffer = bytearray()
-                    
-                    # Read chunks and upload
-                    while chunk := file_stream.read(chunk_size):
-                        buffer.extend(chunk)
-                    
-                    # Upload the complete file
-                    async with session.put(webdav_url, data=buffer, headers=headers) as response:
+                    # Use aiohttp's streaming upload capability
+                    async with session.put(
+                        webdav_url, 
+                        data=file_stream_generator(), 
+                        headers=headers,
+                        chunked=True
+                    ) as response:
                         if response.status in (201, 204):
                             print(f"[PRODUCTION MODE] File uploaded to Hetzner: {webdav_url}")
                             return True
