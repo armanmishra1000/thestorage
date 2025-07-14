@@ -52,7 +52,7 @@ async def upload_streamed(request: Request):
                     raise HTTPException(status_code=500, detail=f"Hetzner error {resp.status}: {detail}")
     else:
         # Local dev – write to disk incrementally
-        import aiofiles, os
+        import aiofiles
         local_path = os.path.join(hetzner_client.local_storage_dir, remote_path)
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         async with aiofiles.open(local_path, "wb") as f:
