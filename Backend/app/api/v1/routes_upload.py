@@ -21,6 +21,55 @@ router = APIRouter()
 
 @router.post("/upload", response_model=dict)
 @timed_api_endpoint
+async def upload_streamed(request: Request):
+    """
+    Stream a file directly from the HTTP request body to Hetzner Storage-Box without buffering.
+    The browser should POST the raw file (or a single-part multipart body) and set
+    X-File-Name and X-File-Type headers.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    filename = request.headers.get("X-File-Name", "untitled.bin")
+    content_type = request.headers.get("X-File-Type", "application/octet-stream")
+
+    remote_path = hetzner_client.generate_remote_path(filename)
+
+    # Log start
+    log_file_operation("upload_start", {"filename": filename, "content_type": content_type, "client_ip": client_ip}, {})
+
+    if hetzner_client.is_production:
+        import aiohttp
+        auth = aiohttp.BasicAuth(login=hetzner_client.user, password=hetzner_client.password)
+        url = f"{hetzner_client.base_url}{hetzner_client.base_path}/{remote_path}"
+        headers = {"Content-Type": content_type, "Overwrite": "T"}
+
+        async def body_gen():
+            async for chunk in request.stream():
+                yield chunk
+        async with aiohttp.ClientSession(auth=auth) as session:
+            async with session.put(url, data=body_gen(), headers=headers, chunked=True) as resp:
+                if resp.status not in (200, 201, 204):
+                    detail = await resp.text()
+                    raise HTTPException(status_code=500, detail=f"Hetzner error {resp.status}: {detail}")
+    else:
+        # Local dev – write to disk incrementally
+        import aiofiles, os
+        local_path = os.path.join(hetzner_client.local_storage_dir, remote_path)
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        async with aiofiles.open(local_path, "wb") as f:
+            async for chunk in request.stream():
+                await f.write(chunk)
+
+    # Log completion
+    log_file_operation("upload_complete", {"filename": filename, "remote_path": remote_path}, {"success": True})
+
+    # Build share URL
+    if os.environ.get("RENDER", "").lower() == "true":
+        share_url = f"https://{settings.DOWNLOAD_DOMAIN}/{remote_path}"
+    else:
+        share_url = f"http://localhost:5002/api/v1/files/download/{remote_path}"
+
+    return {"share_url": share_url}
+@timed_api_endpoint
 async def upload_file(
     request: Request,
     file: UploadFile = File(...),
